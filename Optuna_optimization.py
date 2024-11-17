@@ -5,6 +5,8 @@ from mpl_toolkits import mplot3d
 import csv
 
 # Fitness function
+import sys
+print(sys.executable)
 
 #Rotate in the x axis
 def x_rot(angle):
@@ -13,29 +15,29 @@ def x_rot(angle):
 
 def magnetic_field_calculation(amps):
     # Outer circle radius (distance from eletromagnetic rings to origin)
-    outer_circle_radius = 0.35
+    outer_circle_radius = 0.05
 
     # Circle
-    Ndeg = 90      # numer of increments for phi
-    a = .05          # circle radius
-    df = 360.0/Ndeg # differential load of
+    Ndeg = 45                               # numer of increments for phi
+    a = 0.0125                              # circle radius
+    df = 360.0/Ndeg                         # differential load of
     dLmag = (df* np.pi / 180) * a
 
-    Ncirc = 6                # number of electromagnetic rings
-    omega = 2 * np.pi / Ncirc # differential load of tubulation circle that will dictate the distance bewtween each electromagnetic field ring in degrees
+    Ncirc = 2                               # number of electromagnetic rings
+    omega = 2 * np.pi / Ncirc               # differential load of tubulation circle that will dictate the distance bewtween each electromagnetic field ring in degrees
 
     ########## Analised Points ##########
     Point = [0,0,0] # Reference Point, start (origin)
 
-    nx, ny, nz = (1, 40, 40)          # number of points (resolution)
-    xv = np.linspace(0, a, nx) # vector of the points relative to the x axis
-    yv = np.linspace(-1*outer_circle_radius, outer_circle_radius, ny) # vector of the points relative to the y axis
-    zv = np.linspace(-1*outer_circle_radius, outer_circle_radius, nz) # vector of the points relative to the z axis
+    nx, ny, nz = (1, 20, 20)                                            # number of points (resolution)
+    xv = np.linspace(0, a, nx)                                          # vector of the points relative to the x axis
+    yv = np.linspace(-1*outer_circle_radius, outer_circle_radius, ny)   # vector of the points relative to the y axis
+    zv = np.linspace(-1*outer_circle_radius, outer_circle_radius, nz)   # vector of the points relative to the z axis
 
     x, y, z = np.meshgrid(xv, yv, zv)
 
     # Set the dimensions of the cylinder
-    cylinder_radius = 0.25
+    cylinder_radius = 0.007
     cylinder_height = 1
 
     # Calculate the distance from the origin for each point in 3D
@@ -49,7 +51,7 @@ def magnetic_field_calculation(amps):
     y_valid = y[valid_points]
     z_valid = z[valid_points]
 
-    amp_turns = 200
+    amp_turns = 1000
     I = amps * amp_turns
 
     ########## Empty Matrices of magnetic force vectors ##########
@@ -111,7 +113,7 @@ def magnetic_field_calculation(amps):
 
     return Dp, med
     
-
+nvar = 6
 test_inputt=np.zeros((2,6))
 
 def objective(trial):
@@ -122,42 +124,31 @@ def objective(trial):
     var4 = trial.suggest_float("var4", -20.0, 20.0)
     var5 = trial.suggest_float("var5", -20.0, 20.0)
     var6 = trial.suggest_float("var6", -20.0, 20.0)      
-  
+
     test_inputt=np.hstack((var1, var2, var3, var4, var5, var6))
-    #test_inputt[1,:]=np.hstack((var1, var2, var3, var4, var5, var6))
 
     print(test_inputt)
 
     predicted_y_testt = magnetic_field_calculation(test_inputt)
-    print(predicted_y_testt)
     
     obj1=predicted_y_testt[0]
     obj2=predicted_y_testt[1]
-    #print(obj1)
-    #print(obj2)
 
-    return obj1,obj2
-
-# Rodando Study
-study = optuna.create_study(directions=["minimize", "maximize"])
-study.optimize(objective, n_trials=5)
-               
-#pareto = optuna.visualization.plot_pareto_front(study, target_names=["Tan", "Epson 1"])
-#fig, ax = plt.subplots()
-#pareto.axis('equal')
-#plt.savefig('fig_pareto.png', dpi=400)
-#pareto.show()
-
-print(f"Number of trials on the Pareto front: {len(study.best_trials)}")
+    return obj1, obj2
 
 def convert_to_float(lst):
     result = [float(x) for x in list(lst)]
     return result
 
-#trials=len(study.best_trials)
+# Create study and run it
+sampler = optuna.samplers.NSGAIISampler()
+study = optuna.create_study(directions=["minimize", "maximize"], sampler=sampler)
+study.optimize(objective, n_trials=100)
+
+print(f"Number of trials on the Pareto front: {len(study.best_trials)}")
 
 i=0
-varT=np.zeros((len(study.best_trials),6))
+varT=np.zeros((len(study.best_trials),nvar))
 for trial in study.best_trials:
     varT[i,:]=convert_to_float(trial.params.values())
     i=i+1
@@ -168,50 +159,21 @@ for trial in study.best_trials:
     objT[i,:]=(trial.values[0], trial.values[1])
     i=i+1
     
-#print(varT)
-#print(objT) 
-
 aux=np.concatenate((varT,objT), axis=1)
-#print(aux)
 
-# Example.csv gets created in the current working directory 
-with open('Example.csv', 'w', newline = '') as csvfile:
+# Create .csv
+with open('2magnetsn.csv', 'w', newline = '') as csvfile:
     my_writer = csv.writer(csvfile, delimiter = ' ')
     my_writer.writerow(aux)
 
-
-#j=0
-#for i in range(len(aux)):
-#    if aux[i,3]>=0: # or aux[i,4]>=0:
-#        j=j+1
-
-#aux2=np.zeros((j,6))
-#j=0
-#for i in range(len(aux)):
-#    if aux[i,3]>=-0: # or aux[i,4]>=0:
-#        #print(aux[i,3])
-#        aux2[j,:]=aux[i,:]
-#        j=j+1
-
-#print(j)        
-#print(aux2.shape)
-       
-#for i in range(len(aux2)):
-#      print ('Freq(Hz):','%.2f' % aux2[i,0],'X:','%.2f'  % aux2[i,1],'Temp(K):','%.2f' % aux2[i,2],'Tan:','%.4f' % aux2[i,3],'Epsilon 1:','%.2f' % aux2[i,4])
-
+# Plot graph
 fontsize=14
-#plt.figure(figsize=(10,8))
-#mpl.style.use('default')
-#plt.plot(objT[:,0],objT[:,1],'o')
-plt.plot(aux[:,6],aux[:,7],'o', markersize=4, color='blue')
+plt.plot(aux[:,nvar],aux[:,nvar+1],'o', markersize=4, color='blue')
 plt.xlabel('Desvio padrão', fontsize=fontsize)
 plt.xticks(fontsize = 12) 
 plt.ylabel('Intensidade média', fontsize=fontsize)
 plt.yticks(fontsize = 12) 
-#plt.legend(['Pareto curve'], loc='lower right', fontsize=12)
-#plt.savefig('fig_pareto.png', dpi=400)
-#plt.grid()
-plt.savefig('fig_pareto.eps', format='eps')
+plt.savefig('fig_pareto_2magnetsn.eps', format='eps')
 
 
 plt.show()
