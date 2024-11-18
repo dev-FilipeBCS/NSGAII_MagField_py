@@ -4,10 +4,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import csv
 
-# Fitness function
-import sys
-print(sys.executable)
-
 #Rotate in the x axis
 def x_rot(angle):
     rotation_matrix=np.array([[1,0,0],[0, np.cos(angle),-np.sin(angle)],[0, np.sin(angle), np.cos(angle)]])
@@ -102,16 +98,26 @@ def magnetic_field_calculation(amps):
             H[k, 1] = np.sum(dH[:,1]) + H[k, 1]
             H[k, 2] = np.sum(dH[:,2]) + H[k, 2]
             
-    # Calculate the magnitude of the magnetic field vectors
+    # Normalize each vector in H to create unit vectors
+    H_magnitudes = np.linalg.norm(H, axis=1).reshape(-1, 1)  # Magnitudes of each H vector
+    H_unit = H / H_magnitudes  # H as unit vectors
+
+    # Standard vector to compare angles
+    standard_vector = np.array([0, 1, 0])
+
+    # Calculate the angle between each H unit vector and the standard vector
+    dot_products = np.dot(H_unit, standard_vector)
+    angles = np.arccos(np.clip(dot_products, -1.0, 1.0))  # Angle in radians
+
+    # Return the standard deviation of the angles
+    angle_std_dev = np.std(angles)
+
+    # Calculate the mean and standard deviation of the magnetic field magnitudes (not unit vectors)
     H_mag = np.sqrt(np.sum(H**2, axis=1))
+    mean_mag = np.mean(H_mag)
+    std = np.std(H_mag)
 
-    # Calculate the mean of the magnetic field magnitudes
-    med = np.mean(H_mag)
-
-    # Calculate the standard deviation of the magnetic field magnitudes
-    Dp = np.std(H_mag)
-
-    return Dp, med
+    return angle_std_dev, mean_mag, std
     
 nvar = 6
 test_inputt=np.zeros((2,6))
@@ -125,25 +131,24 @@ def objective(trial):
     var5 = trial.suggest_float("var5", -20.0, 20.0)
     var6 = trial.suggest_float("var6", -20.0, 20.0)      
 
-    test_inputt=np.hstack((var1, var2, var3, var4, var5, var6))
-
-    print(test_inputt)
+    test_inputt = np.array([var1, var2, var3, var4, var5, var6])
 
     predicted_y_testt = magnetic_field_calculation(test_inputt)
     
     obj1=predicted_y_testt[0]
     obj2=predicted_y_testt[1]
+    obj3=predicted_y_testt[2]
 
-    return obj1, obj2
+    return obj1, obj2, obj3
 
 def convert_to_float(lst):
     result = [float(x) for x in list(lst)]
     return result
 
 # Create study and run it
-sampler = optuna.samplers.NSGAIISampler()
-study = optuna.create_study(directions=["minimize", "maximize"], sampler=sampler)
-study.optimize(objective, n_trials=100)
+sampler = optuna.samplers.TPESampler()
+study = optuna.create_study(directions=["minimize", "maximize", "minimize"], sampler=sampler)
+study.optimize(objective, n_trials=1e4)
 
 print(f"Number of trials on the Pareto front: {len(study.best_trials)}")
 
@@ -154,9 +159,9 @@ for trial in study.best_trials:
     i=i+1
 
 i=0   
-objT=np.zeros((len(study.best_trials),2))
+objT=np.zeros((len(study.best_trials),3))
 for trial in study.best_trials:
-    objT[i,:]=(trial.values[0], trial.values[1])
+    objT[i,:]=(trial.values[0], trial.values[1], trial.values[2])
     i=i+1
     
 aux=np.concatenate((varT,objT), axis=1)
@@ -166,15 +171,20 @@ with open('2magnetsn.csv', 'w', newline = '') as csvfile:
     my_writer = csv.writer(csvfile, delimiter = ' ')
     my_writer.writerow(aux)
 
-# Plot graph
-fontsize=14
-plt.plot(aux[:,nvar],aux[:,nvar+1],'o', markersize=4, color='blue')
-plt.xlabel('Desvio padrão', fontsize=fontsize)
-plt.xticks(fontsize = 12) 
-plt.ylabel('Intensidade média', fontsize=fontsize)
-plt.yticks(fontsize = 12) 
-plt.savefig('fig_pareto_2magnetsn.eps', format='eps')
+# Set up 3D plot
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
 
+# Plot the Pareto front in 3D
+ax.scatter(aux[:, nvar], aux[:, nvar + 1], aux[:, nvar + 2], c='blue', marker='o')
 
+# Set axis labels
+ax.set_xlabel('Standard Deviation (Dp)', fontsize=14)
+ax.set_ylabel('Mean Intensity (med)', fontsize=14)
+ax.set_zlabel('Angle to Standard Vector (radians)', fontsize=14)
+
+# Set ticks for readability
+ax.tick_params(axis='both', which='major', labelsize=12)
+
+# Show plot
 plt.show()
-
