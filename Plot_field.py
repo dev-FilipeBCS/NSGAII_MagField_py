@@ -1,17 +1,13 @@
-import optuna
-import numpy as np 
+import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-import csv
-import scipy.interpolate
-
 
 #Rotate in the x axis
 def x_rot(angle):
     rotation_matrix=np.array([[1,0,0],[0, np.cos(angle),-np.sin(angle)],[0, np.sin(angle), np.cos(angle)]])
     return rotation_matrix
 
-def magnetic_field_calculation(amps):
+def magnetic_field_plot(amps):
     # Outer circle radius (distance from eletromagnetic rings to origin)
     outer_circle_radius = 0.05
 
@@ -100,120 +96,75 @@ def magnetic_field_calculation(amps):
             H[k, 1] = np.sum(dH[:,1]) + H[k, 1]
             H[k, 2] = np.sum(dH[:,2]) + H[k, 2]
             
-    # Normalize each vector in H to create unit vectors
-    H_magnitudes = np.linalg.norm(H, axis=1).reshape(-1, 1)  # Magnitudes of each H vector
-    H_unit = H / H_magnitudes  # H as unit vectors
+    # Calculate the magnitude of the magnetic field vectors
+    H_mag = np.linalg.norm(H, axis=1)
 
-    # Standard vector to compare angles
-    standard_vector = np.array([0, 1, 0])
+    # Calculate mean magnitude
+    print(np.mean(H_mag))
 
-    # Calculate the angle between each H unit vector and the standard vector
-    dot_products = np.dot(H_unit, standard_vector)
-    angles = np.arccos(np.clip(dot_products, -1.0, 1.0))  # Angle in radians
+    # Normalize the magnitudes to be between 0 and 1 for colormap
+    H_mag_normalized = (H_mag - np.min(H_mag)) / (np.max(H_mag) - np.min(H_mag))
 
-    # Return the standard deviation of the angles
-    angle_std_dev = np.std(angles)
+    # Use a colormap to assign colors based on the normalized magnitudes
+    colors = plt.cm.viridis(H_mag_normalized)
 
-    # Calculate the mean and standard deviation of the magnetic field magnitudes (not unit vectors)
-    H_mag = np.sqrt(np.sum(H**2, axis=1))
-    mean_mag = np.mean(H_mag)
-    std = np.std(H_mag)
+    # Plot color gradient
+    fig_color = plt.figure()
+    ax_color = fig_color.add_subplot(111, projection='3d')
 
-    return angle_std_dev, mean_mag, std
-    
-nvar = 6
-test_inputt=np.zeros((2,6))
+    # Plot circle
+    for j in range(Ncirc):
+        if I[j] == 0:
+            color = 'grey'
+        elif I[j] > 0:
+            color = 'red'
+        elif I[j] < 0:
+            color = 'blue'
+        ax_color.plot3D(S[j, :, 0], S[j, :, 1], S[j, :, 2], label=f'Circle {j}', color=color)
 
-def objective(trial):
+    # Create a scatter plot with colors representing the magnitude of the magnetic field vectors
+    scatter_color = ax_color.scatter(x_valid, y_valid, z_valid, c=H_mag_normalized, cmap='viridis', marker='o', s=20)
 
-    var1 = trial.suggest_float("var1", -20.0, 20.0)
-    var2 = trial.suggest_float("var2", -20.0, 20.0)
-    var3 = trial.suggest_float("var3", -20.0, 20.0)
-    var4 = trial.suggest_float("var4", -20.0, 20.0)
-    var5 = trial.suggest_float("var5", -20.0, 20.0)
-    var6 = trial.suggest_float("var6", -20.0, 20.0)      
+    ax_color.set_xlim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
+    ax_color.set_ylim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
+    ax_color.set_zlim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
 
-    test_inputt = np.array([var1, var2, var3, var4, var5, var6])
+    plt.colorbar(scatter_color, ax=ax_color, label='Magnetic Field Magnitude Normalized')
 
-    predicted_y_testt = magnetic_field_calculation(test_inputt)
-    
-    obj1=predicted_y_testt[0]
-    obj2=predicted_y_testt[1]
-    obj3=predicted_y_testt[2]
+    ax_color.set_xlabel('X Axis (m)')
+    ax_color.set_ylabel('Y Axis (m)')
+    ax_color.set_zlabel('Z Axis (m)')
 
-    return obj1, obj2, obj3
+    # Plot quiver arrows
+    fig_quiver = plt.figure()
+    ax_quiver = fig_quiver.add_subplot(111, projection='3d')
 
-def convert_to_float(lst):
-    result = [float(x) for x in list(lst)]
-    return result
+    # Plot circle
+    for j in range(Ncirc):
+        if I[j] == 0:
+            color = 'grey'
+        elif I[j] > 0:
+            color = 'red'
+        elif I[j] < 0:
+            color = 'blue'
+        ax_quiver.plot3D(S[j, :, 0], S[j, :, 1], S[j, :, 2], label=f'Circle {j}', color=color)
 
-# Create study and run it
-sampler = optuna.samplers.NSGAIISampler()
-study = optuna.create_study(directions=["minimize", "maximize", "minimize"], sampler=sampler)
-study.optimize(objective, n_trials=1e4)
+        # Create quiver arrows representing the magnetic field vectors
+        ax_quiver.quiver(x_valid, y_valid, z_valid, H[:, 0]/20, H[:, 1]/20, H[:, 2]/20)
 
-print(f"Number of trials on the Pareto front: {len(study.best_trials)}")
+    ax_quiver.set_xlim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
+    ax_quiver.set_ylim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
+    ax_quiver.set_zlim(-1.2 * outer_circle_radius, 1.2 * outer_circle_radius)
 
-i=0
-varT=np.zeros((len(study.best_trials),nvar))
-for trial in study.best_trials:
-    varT[i,:]=convert_to_float(trial.params.values())
-    i=i+1
+    ax_quiver.set_xlabel('X Axis (m)')
+    ax_quiver.set_ylabel('Y Axis (m)')
+    ax_quiver.set_zlabel('Z Axis (m)')
 
-i=0   
-objT=np.zeros((len(study.best_trials),3))
-for trial in study.best_trials:
-    objT[i,:]=(trial.values[0], trial.values[1], trial.values[2])
-    i=i+1
-    
-aux=np.concatenate((varT,objT), axis=1)
+    plt.show()
 
-# Create .csv
-with open('2magnetsn.csv', 'w', newline = '') as csvfile:
-    my_writer = csv.writer(csvfile, delimiter = ' ')
-    my_writer.writerow(aux)
+    return 0
 
-# Set up 3D plot
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
 
-# Plot the Pareto front in 3D
-ax.scatter(aux[:, nvar], aux[:, nvar + 1], aux[:, nvar + 2], c='blue', marker='o')
+I = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
 
-# Set axis labels
-ax.set_xlabel('Standard Deviation (Dp)', fontsize=14)
-ax.set_ylabel('Mean Intensity (med)', fontsize=14)
-ax.set_zlabel('Angle to Standard Vector (radians)', fontsize=14)
-
-# Set ticks for readability
-ax.tick_params(axis='both', which='major', labelsize=12)
-
-fig = plt.figure()
-# Extract objective values for clarity
-std_dev = aux[:, nvar]     # Standard deviation (Dp)
-mean_intensity = aux[:, nvar + 1]  # Mean Intensity (med)
-angle_radians = aux[:, nvar + 2]   # Angle to Standard Vector (radians)
-
-# Create a meshgrid to interpolate the data
-grid_x, grid_y = np.mgrid[std_dev.min():std_dev.max():100j, mean_intensity.min():mean_intensity.max():100j]
-
-# Interpolate angle values over the grid (creates a continuous surface)
-grid_z = scipy.interpolate.griddata((std_dev, mean_intensity), angle_radians, (grid_x, grid_y), method='cubic')
-
-# Set up the 3D plot
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-# Plot the interpolated surface (the "blanket")
-surf = ax.plot_surface(grid_x, grid_y, grid_z, cmap='viridis', edgecolor='none', alpha=0.8)
-
-# Set axis labels
-ax.set_xlabel('Standard Deviation (Dp)', fontsize=14)
-ax.set_ylabel('Mean Intensity (med)', fontsize=14)
-ax.set_zlabel('Angle to Standard Vector (radians)', fontsize=14)
-
-# Add color bar for reference
-fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-
-# Show plot
-plt.show()
+magnetic_field_plot(I)
