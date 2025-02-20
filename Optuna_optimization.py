@@ -96,29 +96,29 @@ def magnetic_field_calculation(amps):
                 dH[i,:] = I[j]*np.cross(dL,Ruv)/(4*np.pi*Rmag**2)
                 dHmag[i] = np.linalg.norm(dH[i])
 
-            H[k , 0] = np.sum(dH[:,0]) + H[k, 0]
+            H[k, 0] = np.sum(dH[:,0]) + H[k, 0]
             H[k, 1] = np.sum(dH[:,1]) + H[k, 1]
             H[k, 2] = np.sum(dH[:,2]) + H[k, 2]
             
     # Normalize each vector in H to create unit vectors
-    H_magnitudes = np.linalg.norm(H, axis=1).reshape(-1, 1)  # Magnitudes of each H vector
-    H_unit = H / H_magnitudes  # H as unit vectors
+    H_magnitudes = np.linalg.norm(H, axis=1)
+    H_norms = np.linalg.norm(H, axis=1, keepdims=True)  
+    H_normalized = H / np.where(H_norms == 0, 1, H_norms) 
 
-    # Standard vector to compare angles
-    standard_vector = np.array([0, 1, 0])
+    # # Calculate the angle between each H unit vector and the standard vector
+    # standard_vector = np.array([0, 1, 0])
+    # dot_products = np.dot(H, standard_vector)
 
-    # Calculate the angle between each H unit vector and the standard vector
-    dot_products = np.dot(H_unit, standard_vector)
-    angles = np.arccos(np.clip(dot_products, -1.0, 1.0))  # Angle in radians
+    # Because the standard vector is [0,1,0] the result of np.dot(H, standard_vector) is the same as H[:, 1]
+    # this way angle = arccos(dot(A,B) / (|A|* |B|))
+    angles = np.arccos(H_normalized[:, 1])
 
     # Return the standard deviation of the angles
     angle_std_dev = np.std(angles)
 
     # Calculate the mean and standard deviation of the magnetic field magnitudes (not unit vectors)
-    H_mag = np.sqrt(np.sum(H**2, axis=1))
-    mean_mag = np.mean(H_mag)
-    std = np.std(H_mag)
-
+    mean_mag = np.mean(H_magnitudes)
+    std = np.std(H_magnitudes)
     return angle_std_dev, mean_mag, std
     
 nvar = 6
@@ -150,7 +150,7 @@ def convert_to_float(lst):
 # Create study and run it
 sampler = optuna.samplers.NSGAIISampler()
 study = optuna.create_study(directions=["minimize", "maximize", "minimize"], sampler=sampler)
-study.optimize(objective, n_trials=1e4)
+study.optimize(objective, n_trials= 10000)
 
 print(f"Number of trials on the Pareto front: {len(study.best_trials)}")
 
@@ -169,7 +169,7 @@ for trial in study.best_trials:
 aux=np.concatenate((varT,objT), axis=1)
 
 # Create .csv
-with open('2magnetsn.csv', 'w', newline = '') as csvfile:
+with open('data.csv', 'w', newline = '') as csvfile:
     my_writer = csv.writer(csvfile, delimiter = ' ')
     my_writer.writerow(aux)
 
@@ -188,7 +188,6 @@ ax.set_zlabel('Angle to Standard Vector (radians)', fontsize=14)
 # Set ticks for readability
 ax.tick_params(axis='both', which='major', labelsize=12)
 
-fig = plt.figure()
 # Extract objective values for clarity
 std_dev = aux[:, nvar]     # Standard deviation (Dp)
 mean_intensity = aux[:, nvar + 1]  # Mean Intensity (med)

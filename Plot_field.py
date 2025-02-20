@@ -98,6 +98,7 @@ def magnetic_field_plot(amps):
             
     # Calculate the magnitude of the magnetic field vectors
     H_mag = np.linalg.norm(H, axis=1)
+    print(H_mag.shape)
 
     # Calculate mean magnitude
     print(np.mean(H_mag))
@@ -165,6 +166,6 @@ def magnetic_field_plot(amps):
     return 0
 
 
-I = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+I = [-1, -1, -1, -1, -1, -1]
 
 magnetic_field_plot(I)
